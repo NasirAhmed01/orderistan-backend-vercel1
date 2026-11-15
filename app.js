@@ -64,7 +64,7 @@ app.use(cors({
 }));
 // Diagnostic health check: runs BEFORE the DB middleware and reports what is wrong (no secrets are printed).
 app.get("/api/health", async (_req, res) => {
-  const need = ["MONGODB_URI", "JWT_SECRET", "CLOUDINARY_URL", "CRON_SECRET", "ALLOWED_ORIGINS"];
+  const need = ["MONGODB_URI", "JWT_SECRET", "CLOUDINARY_URL", "CRON_SECRET", "ALLOWED_ORIGINS", "BREVO_API_KEY", "BREVO_SENDER_EMAIL", "ADMIN_EMAIL"];
   const env = Object.fromEntries(need.map((k) => [k, !!process.env[k]]));
   try { await init(); res.json({ status: "ok", service: "Orderistan API", db: "connected", env, allowedOrigins: extraOrigins }); }
   catch (e) { res.status(500).json({ status: "error", stage: "database/startup", message: String(e.message).slice(0, 300), env }); }
