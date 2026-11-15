@@ -27,8 +27,11 @@ async function send({ to, name, subject, html, text }) {
     signal: AbortSignal.timeout(10000)
   }).catch((e) => { console.error("brevo network error:", e.message); throw Object.assign(new Error("Could not send the email. Please try again."), { status: 503 }); });
   if (!res.ok) {
-    console.error("brevo error", res.status, (await res.text().catch(() => "")).slice(0, 300));   // never logs the key or the code
-    throw Object.assign(new Error("Could not send the email. Please try again."), { status: 503 });
+    const body = (await res.text().catch(() => "")).slice(0, 300);
+    console.error("brevo error", res.status, body);   // never logs the key or the code
+    let why = ""; try { why = JSON.parse(body).message || ""; } catch { why = body; }
+    // The reason comes from Brevo itself (no secrets in it); it tells the owner exactly what to fix in Brevo.
+    throw Object.assign(new Error(`Could not send the email (Brevo ${res.status}: ${String(why).slice(0, 160)}).`), { status: 503 });
   }
   return { ok: true };
 }
