@@ -47,13 +47,17 @@ app.use(helmet({
 
 // CORS: only orderistan.site, its store sub-domains, ALLOWED_ORIGINS, and localhost in development.
 const ROOT = (process.env.ROOT_DOMAIN || "").toLowerCase();
-const extraOrigins = (process.env.ALLOWED_ORIGINS || "").split(",").map((x) => x.trim()).filter(Boolean);
+// Tolerant parsing: accepts commas/spaces/newlines, surrounding quotes and trailing slashes.
+const norm = (x) => String(x).trim().replace(/^["\x27]+|["\x27]+$/g, "").replace(/\/+$/, "").toLowerCase();
+// Built-in allowed frontends (so nothing needs to be set in Vercel). Extra ones can still be added with ALLOWED_ORIGINS.
+const DEFAULT_ORIGINS = ["https://orderistan-frontend-cloudflare.nasirsaeed6767.workers.dev", "https://orderistan-complete.nasirsaeed6767.workers.dev"];
+const extraOrigins = [...DEFAULT_ORIGINS, ...(process.env.ALLOWED_ORIGINS || "").split(/[\s,;]+/)].map(norm).filter(Boolean);
 app.use(cors({
   origin(origin, cb) {
     if (!origin) return cb(null, true); // same-origin / server-to-server
     try {
       const h = new URL(origin).hostname.toLowerCase();
-      const ok = extraOrigins.includes(origin) || (ROOT && (h === ROOT || h.endsWith("." + ROOT))) || (!isProd && (h === "localhost" || h.endsWith(".localhost")));
+      const ok = extraOrigins.includes(norm(origin)) || (ROOT && (h === ROOT || h.endsWith("." + ROOT))) || (!isProd && (h === "localhost" || h.endsWith(".localhost")));
       cb(null, !!ok);
     } catch { cb(null, false); }
   }
@@ -62,7 +66,7 @@ app.use(cors({
 app.get("/api/health", async (_req, res) => {
   const need = ["MONGODB_URI", "JWT_SECRET", "CLOUDINARY_URL", "CRON_SECRET", "ALLOWED_ORIGINS"];
   const env = Object.fromEntries(need.map((k) => [k, !!process.env[k]]));
-  try { await init(); res.json({ status: "ok", service: "Orderistan API", db: "connected", env }); }
+  try { await init(); res.json({ status: "ok", service: "Orderistan API", db: "connected", env, allowedOrigins: extraOrigins }); }
   catch (e) { res.status(500).json({ status: "error", stage: "database/startup", message: String(e.message).slice(0, 300), env }); }
 });
 app.use((req, res, next) => (req.method === "OPTIONS" ? next() : init().then(() => next(), next))); // DB ready before any route
@@ -114,4 +118,6 @@ function init() {
   if (!ready) ready = connectDB().then(seedAdmin).then(() => plans.seed()).catch((e) => { ready = null; throw e; });
   return ready;
 }
-module.exports = { app, init, trust };
+// export the Express app itself (a function) and attach helpers, so it works even if a platform treats this file as the entry point
+app.init = init; app.trust = trust; app.app = app;
+module.exports = app;
