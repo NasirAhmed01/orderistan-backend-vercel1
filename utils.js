@@ -14,7 +14,12 @@ const sortBy = (table, key, dflt) => (typeof key === "string" && hasOwn(table, k
 const qs = (v, max = 60) => (v === undefined || v === null ? "" : String(Array.isArray(v) ? v[0] : v).slice(0, max));
 const money = (v, max = 1e8) => { const n = Number(v); return Number.isFinite(n) ? Math.min(max, Math.max(0, n)) : 0; };
 // Runs slow, non-essential work (notifications, activity log) AFTER the response, so the customer does not wait for it.
-const bg = (p) => { Promise.resolve(p).catch((e) => console.error("background task failed:", e?.message || e)); };
+// On Vercel the function is frozen as soon as the response is sent, so background work must be registered with waitUntil.
+let waitUntil = null; try { ({ waitUntil } = require("@vercel/functions")); } catch { /* local dev: plain background promise */ }
+const bg = (p) => {
+  const pr = Promise.resolve(p).catch((e) => console.error("background task failed:", e?.message || e));
+  if (waitUntil) { try { waitUntil(pr); } catch { /* not inside a Vercel request */ } }
+};
 const fail = (status, message) => Object.assign(new Error(message), { status });
 
 const token = (u) => jwt.sign({ sub: u._id, role: u.role, tv: u.tokenVersion || 0 }, process.env.JWT_SECRET, {
